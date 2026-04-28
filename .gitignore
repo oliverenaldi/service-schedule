@@ -1,0 +1,4 @@
+schedule_output.csv
+previous_schedules/
+__pycache__/
+*.xlsx

@@ -1,0 +1,4 @@
+# Format:
+# Name: YYYY-MM-DD, YYYY-MM-DD
+# Name: YYYY-MM-DD to YYYY-MM-DD (for ranges)
+Toni: 2026-07-04 to 2026-09-26

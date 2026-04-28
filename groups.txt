@@ -1,0 +1,7 @@
+# Format: Group Name: Member1, Member2, ...
+Group 1: Wynnona, Toni, Wira, Trevor, Winston S, Andrew, Ellin M
+Group 2: Aldi, Erico, Reynold, Nina, Beatrix. Jason, Kelly
+Group 3: Chen, Daven, Steffen, Rifelo, Ricky, Karyn
+Group 4: Victor, Winston Y, Stefani, Derron, Billy, Arian, Oliver
+Group 5: Reggy, Danny, Ellin S, Vino, William, Mary, Ruth
+Group 6: Jericho, Ido, Boas, Angel, Grace, Felix, Jotres
