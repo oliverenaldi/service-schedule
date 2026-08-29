@@ -11,6 +11,7 @@ PREVIOUS_DIR = BASE_DIR / "previous_schedules"
 CONFIG_FILE = BASE_DIR / "config.txt"
 GROUPS_FILE = BASE_DIR / "groups.txt"
 UNAVAIL_FILE = BASE_DIR / "unavailability.txt"
+OVERRIDES_FILE = BASE_DIR / "overrides.txt"
 
 
 def parse_config():
@@ -30,7 +31,8 @@ def parse_config():
                 seed = int(line.split(":", 1)[1].strip())
             else:
                 match = re.match(
-                    r"([\w-]+):\s*min_gap=(\d+),\s*type=(individual|group),\s*week=(odd|even|all)(?:,\s*service_type=(\w+))?",
+                    r"([\w-]+):\s*min_gap=(\d+),\s*type=(individual|group),\s*week=(odd|even|all)"
+                    r"(?:,\s*service_type=(\w+))?(?:,\s*hidden=(true|false))?",
                     line,
                 )
                 if match:
@@ -39,6 +41,7 @@ def parse_config():
                         "type": match.group(3),
                         "week": match.group(4),
                         "service_type": match.group(5),
+                        "hidden": match.group(6) == "true",
                     }
     return roles, start, end, seed
 
@@ -97,6 +100,43 @@ def parse_unavailability():
                 else:
                     unavail[name].add(datetime.strptime(part, "%Y-%m-%d").date())
     return unavail
+
+
+def parse_overrides(roles):
+    """Returns {(date, role): candidate} for one-off locked-in assignments.
+
+    Raises ValueError on malformed lines, unknown roles, non-Saturday dates,
+    or duplicate overrides for the same role/date.
+    """
+    overrides = {}
+    if not OVERRIDES_FILE.exists():
+        return overrides
+    with open(OVERRIDES_FILE) as f:
+        for lineno, line in enumerate(f, start=1):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = [p.strip() for p in line.split(":")]
+            if len(parts) != 3 or not all(parts):
+                raise ValueError(
+                    f"overrides.txt line {lineno}: expected 'role: YYYY-MM-DD: name', got: {line}"
+                )
+            role, date_str, name = parts
+            if role not in roles:
+                raise ValueError(f"overrides.txt line {lineno}: unknown role '{role}'")
+            try:
+                date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                raise ValueError(f"overrides.txt line {lineno}: invalid date '{date_str}'")
+            if date.weekday() != 5:
+                raise ValueError(f"overrides.txt line {lineno}: {date_str} is not a Saturday")
+            key = (date, role)
+            if key in overrides:
+                raise ValueError(
+                    f"overrides.txt line {lineno}: duplicate override for role '{role}' on {date_str}"
+                )
+            overrides[key] = name
+    return overrides
 
 
 def load_previous_schedules(roles):
@@ -190,8 +230,16 @@ def get_sibling_roles(role, roles):
     return [r for r in roles if r != role and roles[r].get("service_type") == st]
 
 
-def schedule(roles, start, end, groups, unavail, history):
+def schedule(roles, start, end, groups, unavail, history, overrides=None):
+    if overrides is None:
+        overrides = {}
     saturdays = get_saturdays(start, end)
+    saturday_set = set(saturdays)
+    for (odate, orole) in overrides:
+        if odate not in saturday_set:
+            raise ValueError(
+                f"overrides.txt: {odate} for role '{orole}' is outside the scheduling range"
+            )
     schedule_result = {date: {} for date in saturdays}
 
     # Track last assignment date per role per candidate
@@ -214,8 +262,43 @@ def schedule(roles, start, end, groups, unavail, history):
     for date in saturdays:
         used_individuals = set()  # individuals used today (hard constraint)
         used_groups = set()  # group names used today (hard constraint)
+
+        # Apply locked-in overrides for this date first, before the algorithm runs.
+        date_overrides = {role: cand for (d, role), cand in overrides.items() if d == date}
+        for role, cand in date_overrides.items():
+            cfg = roles[role]
+            if cfg["type"] == "individual" and cand in unavail and date in unavail[cand]:
+                raise ValueError(
+                    f"Override conflict: {cand} is marked unavailable on {date} but pinned to {role}"
+                )
+            if cfg["type"] == "individual" and cand in used_individuals:
+                raise ValueError(
+                    f"Override conflict: {cand} is already assigned another role on {date}"
+                )
+            if cfg["type"] == "group" and cand in used_groups:
+                raise ValueError(
+                    f"Override conflict: group {cand} is already assigned another role on {date}"
+                )
+
+            schedule_result[date][role] = cand
+            last_assigned[role][cand] = date
+            total_count[role][cand] = total_count[role].get(cand, 0) + 1
+
+            if cfg["type"] == "individual":
+                used_individuals.add(cand)
+            elif cfg["type"] == "group":
+                used_groups.add(cand)
+                if cand in groups:
+                    for m in groups[cand]:
+                        used_individuals.add(m)
+
         # Sort roles by number of eligible candidates (most constrained first)
-        active_roles = [r for r in roles if is_active_week(date, roles[r]["week"])]
+        # Hidden roles (e.g. pembawa-khotbah) are never auto-assigned; they only
+        # get a value through overrides.txt, and only feed sibling gap/count tracking.
+        active_roles = [
+            r for r in roles
+            if is_active_week(date, roles[r]["week"]) and r not in date_overrides and not roles[r]["hidden"]
+        ]
         role_order = sorted(active_roles, key=lambda r: len(parse_roster(r)))
 
         for role in role_order:
@@ -297,10 +380,14 @@ def schedule(roles, start, end, groups, unavail, history):
     return schedule_result, saturdays
 
 
-def write_output(schedule_result, saturdays, roles):
+def write_output(schedule_result, saturdays, roles, overrides=None):
     import csv
 
-    role_list = list(roles.keys())
+    if overrides is None:
+        overrides = {}
+    # Hidden roles don't get a column - they only exist to feed sibling gap/count
+    # tracking for another service_type when pinned via overrides.txt.
+    role_list = [r for r in roles if not roles[r]["hidden"]]
     headers = ["Date"] + role_list
 
     csv_path = BASE_DIR / "schedule_output.csv"
@@ -311,7 +398,7 @@ def write_output(schedule_result, saturdays, roles):
             row = [date.strftime("%Y-%m-%d")]
             for role in role_list:
                 val = schedule_result[date].get(role, "")
-                if not is_active_week(date, roles[role]["week"]):
+                if not is_active_week(date, roles[role]["week"]) and (date, role) not in overrides:
                     val = ""
                 row.append(val if val else "")
             writer.writerow(row)
@@ -323,9 +410,10 @@ def main():
     random.seed(seed)
     groups = parse_groups()
     unavail = parse_unavailability()
+    overrides = parse_overrides(roles)
     history = load_previous_schedules(roles)
-    result, saturdays = schedule(roles, start, end, groups, unavail, history)
-    write_output(result, saturdays, roles)
+    result, saturdays = schedule(roles, start, end, groups, unavail, history, overrides)
+    write_output(result, saturdays, roles, overrides)
 
 
 if __name__ == "__main__":

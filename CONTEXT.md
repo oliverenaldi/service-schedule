@@ -24,11 +24,18 @@ Roles active every week: `piket`
 - **individual** — one person per role per Saturday
 - **group** — one group name per role per Saturday (group assigned as a unit)
 
+### Overrides (locked-in assignments)
+`overrides.txt` pins a person to a role/date before the normal algorithm runs for that date. The pin is applied like a normal pick (updates `last_assigned`/`total_count`, marks the person "used" that day) so future gap/load-balancing sees it. A pin conflicting with unavailability or same-day double-booking raises an error rather than being silently applied or skipped. A pin on a week the role isn't normally active (odd/even mismatch) is honored, not treated as a conflict.
+
+### Hidden Roles
+A role with `hidden=true` (e.g. `pembawa-khotbah`) gets no `schedule_output.csv` column and is excluded from auto-assignment — it can only be set via `overrides.txt`. It still participates in `service_type` sibling gap/count tracking, so pinning it affects when its siblings' candidates are next eligible.
+
 ## Hard Constraints (must never be violated)
 1. A person cannot be assigned to two different roles on the same Saturday
 2. A group cannot be assigned to two different roles on the same Saturday
 3. Minimum gap (in weeks) between same person/group in the same role (or sibling roles sharing service_type)
 4. Individual unavailability blocks individual role assignments
+5. An override conflicting with unavailability or same-day double-booking stops the run
 
 ## Soft Constraints (best effort)
 1. When a group is assigned, its members are marked as "used" to avoid individual assignment on the same day — but this is soft, meaning if no other candidate is available, it can be overridden
@@ -53,9 +60,11 @@ Roles are processed in order of most constrained first (fewest eligible candidat
 ├── config.txt                # role definitions, gaps, date range, seed
 ├── groups.txt                # group name → member mapping
 ├── unavailability.txt        # per-person date blackouts
+├── overrides.txt             # locked-in role/date assignments
 ├── rosters/
 │   └── <role-name>.txt       # one candidate per line
-├── previous_schedules/       # drop prior .csv/.xlsx files here
+├── previous_schedules/       # drop prior .csv/.xlsx files here (folder tracked via .gitkeep, contents ignored)
+├── unit-tests/               # unit tests
 └── schedule_output.csv       # generated output
 ```
 
@@ -65,6 +74,5 @@ Roles are processed in order of most constrained first (fewest eligible candidat
 - Multi-service days (morning + evening)
 - Web UI or Google Sheets integration for input
 - Validation report showing constraint violations or near-misses
-- Support for partial manual overrides (lock certain assignments, schedule the rest)
 - Per-person max assignments per quarter
 - Holiday/special event handling (skip certain Saturdays or assign specific people)

@@ -1,4 +1,5 @@
 schedule_output.csv
-previous_schedules/
+previous_schedules/*
+!previous_schedules/.gitkeep
 __pycache__/
 *.xlsx

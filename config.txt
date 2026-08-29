@@ -6,12 +6,14 @@ scheduling_end: 2026-09-26
 seed: 42
 
 # Role definitions
-# format: role_name: min_gap=<weeks>, type=<individual|group>, week=<odd|even|all>, service_type=<shared_type>
+# format: role_name: min_gap=<weeks>, type=<individual|group>, week=<odd|even|all>, service_type=<shared_type>, hidden=<true|false>
 # service_type is optional - roles sharing a service_type enforce gap across each other
 # week: odd = 1st,3rd,5th Saturday of month; even = 2nd,4th Saturday; all = every Saturday
+# hidden is optional (default false) - no output column, never auto-assigned, settable only via overrides.txt
 
 pemimpin-pa-besar: min_gap=4, type=individual, week=odd, service_type=pemimpin
 pemimpin-ibadah: min_gap=4, type=individual, week=even, service_type=pemimpin
+pembawa-khotbah: min_gap=4, type=individual, week=all, service_type=pemimpin, hidden=true
 pemusik-pa-besar: min_gap=3, type=individual, week=odd, service_type=pemusik
 pemusik-ibadah: min_gap=3, type=individual, week=even, service_type=pemusik
 piket: min_gap=2, type=group, week=all

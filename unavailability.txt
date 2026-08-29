@@ -1,4 +1,6 @@
 # Format:
 # Name: YYYY-MM-DD, YYYY-MM-DD
 # Name: YYYY-MM-DD to YYYY-MM-DD (for ranges)
+# Ranges and single dates can be mixed and repeated on one line, e.g.:
+# Name: 2026-07-04 to 2026-07-18, 2026-08-15, 2026-09-05 to 2026-09-19
 Toni: 2026-07-04 to 2026-09-26

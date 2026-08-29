@@ -1,0 +1,7 @@
+# Format:
+# role: YYYY-MM-DD: Name
+# Locks that person into the slot. Conflicts with unavailability or a
+# same-day double-booking stop the run instead of being silently applied.
+#
+# multimedia: 2026-09-05: Oliver
+# pembawa-khotbah: 2026-08-15: Steffen
